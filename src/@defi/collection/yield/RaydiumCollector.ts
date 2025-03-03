@@ -1,187 +1,175 @@
-export interface RaydiumCollectorConfig {
-  id: string;
-  collector: string;
-  enabled: boolean;
+import { YieldCollectorConfig, YieldOpportunity } from "./types";
+
+interface RaydiumApiResponse {
+  success: boolean;
+  data: RaydiumPool[];
+}
+
+export interface RaydiumPool {
+  type: string; // Pool type (e.g., "Standard")
+  programId: string; // Program ID associated with the pool
+  id: string; // Unique pool identifier
+  mintA: TokenMint; // Token A details
+  mintB: TokenMint; // Token B details
+  price: number; // Current price
+  mintAmountA: number; // Amount of token A in the pool
+  mintAmountB: number; // Amount of token B in the pool
+  feeRate: number; // Fee rate as a decimal (e.g., 0.0025 for 0.25%)
+  openTime: string; // Open time (stored as string in response)
+  tvl: number; // Total value locked in USD
+  day?: PoolPeriodData; // Daily metrics (optional)
+  week?: PoolPeriodData; // Weekly metrics (optional)
+  month?: PoolPeriodData; // Monthly metrics (optional)
+  pooltype: string[]; // Array of pool types (e.g., ["OpenBookMarket"])
+  rewardDefaultPoolInfos: string; // e.g., "Ecosystem" (could be refined if structured data)
+  rewardDefaultInfos: RewardInfo[]; // Reward token details
+  lpMint?: TokenMint; // LP token details (optional)
+  // Add other fields as needed (e.g., marketId, farm counts, etc.)
+}
+
+// Token mint details (used for mintA, mintB, and lpMint)
+export interface TokenMint {
+  chainId: number; // Chain identifier (e.g., 101 for Solana)
+  address: string; // Token address
+  programId: string; // Program ID for the token
+  logoURI: string; // URL to token logo
+  symbol: string; // Token symbol (e.g., "WSOL", "USDC")
+  name: string; // Token name (e.g., "Wrapped SOL")
+  decimals: number; // Number of decimal places
+  tags: string[]; // Tags (e.g., ["hasFreeze"])
+  extensions: Record<string, any>; // Flexible extensions object
+}
+
+// Metrics for a specific time period (day, week, month)
+export interface PoolPeriodData {
+  volume: number; // Trading volume in base token
+  volumeQuote: number; // Volume in quote token
+  volumeFee: number; // Fee volume
+  apr: number; // Annualized percentage rate (total)
+  feeApr: number; // Fee component of APR
+  priceMin: number; // Minimum price in period
+  priceMax: number; // Maximum price in period
+  rewardApr: number[]; // Array of reward APRs
+}
+
+// Reward token information
+export interface RewardInfo {
+  mint: TokenMint; // Reward token details
+  perSecond: string; // Reward rate per second (stored as string in response)
+  startTime: string; // Start time as Unix timestamp string
+  endTime: string; // End time as Unix timestamp string
 }
 
 export class RaydiumCollector {
-  private readonly _config: RaydiumCollectorConfig[];
+  private readonly _config: YieldCollectorConfig[];
 
-  constructor(config: RaydiumCollectorConfig[]) {
-    this._config = config;
+  constructor(config: YieldCollectorConfig[]) {
+    if (!config || config.length === 0) {
+      throw new Error("Config array cannot be empty");
+    }
+
+    this._config = config.filter(
+      (c) => c.collector === "raydium" && c.enabled === true
+    );
   }
 
-  public async collect(): Promise<any[]> {
+  public async collect(): Promise<YieldOpportunity[]> {
     console.log("RaydiumCollector.collect");
 
-    const temp = [];
-    for (const collectorConfig of this._config) {
-      if (collectorConfig.enabled) {
-        console.log(`RaydiumCollector enabled: ${collectorConfig.id}`);
-        temp.push(collectorConfig.id.split("-")[1]);
-      }
+    const ids = this._config.map((c) => c.id);
+    if (ids.length === 0) {
+      return [];
     }
-    const ids = temp.join(",");
+    const poolIds = ids.join(",");
 
-    let opportunities: any[] = [];
-    await fetch(`https://api-v3.raydium.io/pools/info/ids?ids=${ids}`)
-      .then((response) => response.json())
-      .then((data) => {
-        opportunities = this.processPoolData(data);
-      })
-      .catch((error) => {
-        console.error("Failed to fetch Raydium pool data:", error);
-      });
-
-    return opportunities;
+    try {
+      const response = await fetch(
+        `https://api-v3.raydium.io/pools/info/ids?ids=${ids}`
+      );
+      const data: RaydiumApiResponse = await response.json();
+      return this.processPoolData(data);
+    } catch (error) {
+      console.error("Failed to fetch Raydium pool data:", error);
+      return [];
+    }
   }
 
-  public processPoolData(rawData: any): any[] {
-    console.log("RaydiumCollector.processPoolData");
-
-    // Check if the API response is valid
-    if (
-      !rawData ||
-      !rawData.success ||
-      !rawData.data ||
-      !Array.isArray(rawData.data)
-    ) {
+  private processPoolData(rawData: RaydiumApiResponse): YieldOpportunity[] {
+    if (!rawData?.success || !Array.isArray(rawData.data)) {
       console.error("Invalid Raydium API response format");
       return [];
     }
+    return rawData.data
+      .map((pool) => this.parsePool(pool))
+      .filter((op) => op !== null);
+  }
 
-    const parsedOpportunities = [];
-
-    // Process each pool in the response
-    for (const pool of rawData.data) {
-      try {
-        // Skip if missing critical information
-        if (!pool.id || !pool.mintA || !pool.mintB || !pool.tvl) {
-          console.warn(
-            `Skipping incomplete pool data: ${pool.id || "unknown"}`
-          );
-          continue;
-        }
-
-        // Create asset name (e.g., "SOL/USDC")
-        const assetName = `${pool.mintA.symbol}/${pool.mintB.symbol}`;
-
-        // Format opportunity ID
-        const opportunityId = `raydium-${pool.mintA.symbol.toLowerCase()}-${pool.mintB.symbol.toLowerCase()}`;
-
-        // Calculate APY (convert from percentage to decimal)
-        // We're using the month.apr value which includes both fee and reward APRs
-        const totalApy =
-          pool.month && typeof pool.month.apr === "number"
-            ? pool.month.apr / 100
-            : pool.week && typeof pool.week.apr === "number"
-            ? pool.week.apr / 100
-            : pool.day && typeof pool.day.apr === "number"
-            ? pool.day.apr / 100
-            : 0;
-
-        // Get fee APY component
-        const feeApy =
-          pool.month && typeof pool.month.feeApr === "number"
-            ? pool.month.feeApr / 100
-            : pool.week && typeof pool.week.feeApr === "number"
-            ? pool.week.feeApr / 100
-            : pool.day && typeof pool.day.feeApr === "number"
-            ? pool.day.feeApr / 100
-            : 0;
-
-        // Extract reward token information
-        const rewardTokens = [];
-        if (pool.rewardDefaultInfos && Array.isArray(pool.rewardDefaultInfos)) {
-          for (const reward of pool.rewardDefaultInfos) {
-            if (reward.mint && reward.mint.symbol) {
-              rewardTokens.push(reward.mint.symbol);
-            }
-          }
-        }
-
-        // Calculate price volatility for risk assessment
-        let priceVolatility = 0;
-        if (pool.month && pool.month.priceMin && pool.month.priceMax) {
-          const priceRange = pool.month.priceMax - pool.month.priceMin;
-          const avgPrice = (pool.month.priceMax + pool.month.priceMin) / 2;
-          priceVolatility = priceRange / avgPrice;
-        }
-
-        // Calculate impermanent loss risk based on price volatility
-        // Higher volatility = higher IL risk
-        const impermanentLossRisk = Math.min(
-          Math.max(priceVolatility * 2, 0.1),
-          0.9
-        );
-
-        // Calculate overall risk score (1-10 scale)
-        // Consider factors: price volatility, pool TVL size, etc.
-        let riskScore = 3; // Default medium-low risk
-
-        // Adjust risk based on TVL (lower TVL = higher risk)
-        if (pool.tvl < 1000000) {
-          // Less than $1M
-          riskScore += 2;
-        } else if (pool.tvl < 5000000) {
-          // Less than $5M
-          riskScore += 1;
-        } else if (pool.tvl > 50000000) {
-          // More than $50M
-          riskScore -= 1;
-        }
-
-        // Adjust risk based on price volatility
-        if (priceVolatility > 0.5) {
-          riskScore += 2;
-        } else if (priceVolatility > 0.3) {
-          riskScore += 1;
-        }
-
-        // Ensure risk score stays within 1-10 range
-        riskScore = Math.max(1, Math.min(10, riskScore));
-
-        // Create the opportunity object
-        const opportunity = {
-          id: opportunityId,
-          protocol: "Raydium",
-          asset: assetName,
-          poolId: pool.id,
-          poolType: Array.isArray(pool.pooltype)
-            ? pool.pooltype.join(",")
-            : "Standard",
-          apy: totalApy,
-          feeApy: feeApy,
-          rewardApy: totalApy - feeApy,
-          tvl: pool.tvl,
-          fee: typeof pool.feeRate === "number" ? pool.feeRate : 0.0025,
-          price: pool.price || 0,
-          volume: {
-            day: pool.day ? pool.day.volume || 0 : 0,
-            week: pool.week ? pool.week.volume || 0 : 0,
-            month: pool.month ? pool.month.volume || 0 : 0,
-          },
-          priceRange: {
-            min: pool.month ? pool.month.priceMin || 0 : 0,
-            max: pool.month ? pool.month.priceMax || 0 : 0,
-          },
-          riskScore: riskScore,
-          impermanentLossRisk: impermanentLossRisk,
-          rewards: rewardTokens,
-          minAmount: 0.1, // Default minimum amount
-          lpMint: pool.lpMint ? pool.lpMint.address : null,
-        };
-
-        parsedOpportunities.push(opportunity);
-      } catch (error) {
-        console.error(
-          `Error parsing Raydium pool ${pool.id || "unknown"}:`,
-          error
-        );
-        // Continue to next pool
-      }
+  private parsePool(pool: RaydiumPool): YieldOpportunity | null {
+    try {
+      if (!pool.id || !pool.mintA || !pool.mintB || !pool.tvl) return null;
+      const assetName = `${pool.mintA.symbol}/${pool.mintB.symbol}`;
+      const opportunityId = `raydium-${pool.mintA.symbol.toLowerCase()}-${pool.mintB.symbol.toLowerCase()}`;
+      const apyData = this.extractApy(pool);
+      const riskData = this.calculateRisk(pool);
+      return {
+        id: opportunityId,
+        protocol: "Raydium",
+        asset: assetName,
+        poolId: pool.id,
+        apy: apyData.totalApy,
+        feeApy: apyData.feeApy,
+        rewardApy: apyData.totalApy - apyData.feeApy,
+        tvl: pool.tvl,
+        riskScore: riskData.riskScore,
+        impermanentLossRisk: riskData.impermanentLossRisk,
+        rewards: this.extractRewardTokens(pool),
+      };
+    } catch (error) {
+      console.error(`Error parsing pool ${pool.id}:`, error);
+      return null;
     }
+  }
 
-    return parsedOpportunities;
+  private extractApy(pool: RaydiumPool): { totalApy: number; feeApy: number } {
+    const periods = [pool.month, pool.week, pool.day];
+    const totalApy =
+      (periods.find((p) => p && typeof p.apr === "number")?.apr ?? 0) / 100;
+    const feeApy =
+      (periods.find((p) => p && typeof p.feeApr === "number")?.feeApr ?? 0) /
+      100;
+    return { totalApy, feeApy };
+  }
+
+  private calculateRisk(pool: RaydiumPool): {
+    riskScore: number;
+    impermanentLossRisk: number;
+  } {
+    const priceVolatility =
+      pool.month && pool.month.priceMin && pool.month.priceMax
+        ? (pool.month.priceMax - pool.month.priceMin) /
+          ((pool.month.priceMax + pool.month.priceMin) / 2)
+        : 0;
+    const impermanentLossRisk = Math.min(
+      Math.max(priceVolatility * 2, 0.1),
+      0.9
+    );
+    let riskScore = 3;
+    if (pool.tvl < 1000000) riskScore += 2;
+    else if (pool.tvl < 5000000) riskScore += 1;
+    else if (pool.tvl > 50000000) riskScore -= 1;
+    if (priceVolatility > 0.5) riskScore += 2;
+    else if (priceVolatility > 0.3) riskScore += 1;
+    return {
+      riskScore: Math.max(1, Math.min(10, riskScore)),
+      impermanentLossRisk,
+    };
+  }
+
+  private extractRewardTokens(pool: RaydiumPool): string[] {
+    return (
+      pool.rewardDefaultInfos
+        ?.filter((r) => r.mint?.symbol)
+        .map((r) => r.mint.symbol) || []
+    );
   }
 }
