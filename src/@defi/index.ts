@@ -1,2 +1,7 @@
-export { RaydiumCollector } from "./collection/index";
-export type { YieldCollectorConfig } from "./collection/yield/types";
+export { RaydiumCollector, OrcaCollector } from "./collection/index";
+export type {
+  BaseYieldCollectorConfig,
+  RaydiumCollectorConfig,
+  OrcaCollectorConfig,
+  MarinadeCollectorConfig,
+} from "./collection/yield/types";

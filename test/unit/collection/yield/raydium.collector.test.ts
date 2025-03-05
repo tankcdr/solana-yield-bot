@@ -1,11 +1,11 @@
-import { RaydiumCollector } from "@defi";
+import {
+  OrcaCollectorConfig,
+  RaydiumCollector,
+  RaydiumCollectorConfig,
+} from "@defi";
 
 // We’ll mock the global.fetch in our tests.
 declare global {
-  // Augment the global object for TypeScript
-  // so it recognizes fetch as a jest.Mock in tests.
-  // This is optional, but helps with IntelliSense.
-  // If you prefer, you can just cast to jest.Mock.
   namespace NodeJS {
     interface Global {
       fetch: jest.Mock;
@@ -44,25 +44,26 @@ describe("Testing RaydiumCollector", () => {
     const collector = new RaydiumCollector([
       {
         collectorId: "not-raydium",
-        id: "whatever",
+        mintOne: "whatever 1",
+        mintTwo: "whatever 2",
         pair: "SOL/USDC",
-        collector: "jupiter", // Not "raydium"
+        collector: "orca",
         enabled: true,
-      },
+      } as OrcaCollectorConfig,
       {
         collectorId: "raydium-disabled",
-        id: "something",
+        poolId: "something",
         pair: "SOL/USDC",
         collector: "raydium",
         enabled: false,
-      },
+      } as RaydiumCollectorConfig,
       {
         collectorId: "raydium-enabled",
-        id: "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2",
+        poolId: "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2",
         pair: "SOL/USDC",
         collector: "raydium",
         enabled: true,
-      },
+      } as RaydiumCollectorConfig,
     ]);
 
     // Only one config is valid => we expect one pool ID in the final fetch
@@ -93,18 +94,18 @@ describe("Testing RaydiumCollector", () => {
     const collector = new RaydiumCollector([
       {
         collectorId: "raydium-SOL-USDC",
-        id: "solUsdcPoolId",
+        poolId: "solUsdcPoolId",
         pair: "SOL/USDC",
         collector: "raydium",
         enabled: true,
-      },
+      } as RaydiumCollectorConfig,
       {
         collectorId: "raydium-BTC-USDC",
-        id: "btcUsdcPoolId",
+        poolId: "btcUsdcPoolId",
         pair: "BTC/USDC",
         collector: "raydium",
         enabled: true,
-      },
+      } as RaydiumCollectorConfig,
     ]);
 
     // Suppose the API returns a list containing both pools
@@ -146,11 +147,11 @@ describe("Testing RaydiumCollector", () => {
     const collector = new RaydiumCollector([
       {
         collectorId: "raydium-edge",
-        id: "somePoolId",
+        poolId: "somePoolId",
         pair: "FAKE/FAKE",
         collector: "raydium",
         enabled: true,
-      },
+      } as RaydiumCollectorConfig,
     ]);
 
     mockFetch(
@@ -192,11 +193,11 @@ describe("Testing RaydiumCollector", () => {
     const collector = new RaydiumCollector([
       {
         collectorId: "raydium-apr-test",
-        id: "periodCheckPool",
+        poolId: "periodCheckPool",
         pair: "SOL/USDC",
         collector: "raydium",
         enabled: true,
-      },
+      } as RaydiumCollectorConfig,
     ]);
 
     mockFetch(
@@ -233,11 +234,11 @@ describe("Testing RaydiumCollector", () => {
     const collector = new RaydiumCollector([
       {
         collectorId: "raydium-risk",
-        id: "riskPool",
+        poolId: "riskPool",
         pair: "SOL/USDC",
         collector: "raydium",
         enabled: true,
-      },
+      } as RaydiumCollectorConfig,
     ]);
 
     mockFetch(
@@ -279,11 +280,11 @@ describe("Testing RaydiumCollector", () => {
     const collector = new RaydiumCollector([
       {
         collectorId: "raydium-rewards",
-        id: "rewardsPool",
+        poolId: "rewardsPool",
         pair: "SOL/USDC",
         collector: "raydium",
         enabled: true,
-      },
+      } as RaydiumCollectorConfig,
     ]);
 
     mockFetch(
@@ -314,11 +315,11 @@ describe("Testing RaydiumCollector", () => {
     const collector = new RaydiumCollector([
       {
         collectorId: "raydium-highValues",
-        id: "extremePool",
+        poolId: "extremePool",
         pair: "SOL/USDC",
         collector: "raydium",
         enabled: true,
-      },
+      } as RaydiumCollectorConfig,
     ]);
 
     mockFetch(

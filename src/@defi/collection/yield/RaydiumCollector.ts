@@ -1,4 +1,8 @@
-import { YieldCollectorConfig, YieldOpportunity } from "./types";
+import {
+  BaseYieldCollectorConfig,
+  RaydiumCollectorConfig,
+  YieldOpportunity,
+} from "./types";
 
 interface RaydiumApiResponse {
   success: boolean;
@@ -61,26 +65,25 @@ export interface RewardInfo {
 }
 
 export class RaydiumCollector {
-  private readonly _config: YieldCollectorConfig[];
+  private readonly _config: RaydiumCollectorConfig[];
 
-  constructor(config: YieldCollectorConfig[]) {
+  constructor(config: BaseYieldCollectorConfig[]) {
     if (!config || config.length === 0) {
       throw new Error("Config array cannot be empty");
     }
 
     this._config = config.filter(
       (c) => c.collector === "raydium" && c.enabled === true
-    );
+    ) as RaydiumCollectorConfig[];
   }
 
   public async collect(): Promise<YieldOpportunity[]> {
     console.log("RaydiumCollector.collect");
 
-    const ids = this._config.map((c) => c.id);
+    const ids = this._config.map((c) => (c as RaydiumCollectorConfig).poolId);
     if (ids.length === 0) {
       return [];
     }
-    const poolIds = ids.join(",");
 
     try {
       const response = await fetch(

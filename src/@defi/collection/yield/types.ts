@@ -1,18 +1,29 @@
-/* example of the yield collector config
-{
-    collectorId: "raydium-58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2",
-    id: "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2",
-    pair: "SOL/USDC",
-    collector: "raydium",
-    enabled: true,
+// Base collector config interface
+export interface BaseYieldCollectorConfig {
+  collectorId: string; // Unique ID for this config entry
+  collector: "raydium" | "orca" | "marinade"; // Limit to supported collectors
+  pair: string; // Human-readable pair name (e.g., "SOL/USDC")
+  enabled: boolean; // Whether this collector is active
 }
-*/
-export interface YieldCollectorConfig {
-  collectorId: string;
-  id: string;
-  pair: string;
-  collector: string;
-  enabled: boolean;
+
+// Raydium-specific config
+export interface RaydiumCollectorConfig extends BaseYieldCollectorConfig {
+  collector: "raydium";
+  poolId: string; // Raydium pool ID
+}
+
+// Orca-specific config
+export interface OrcaCollectorConfig extends BaseYieldCollectorConfig {
+  collector: "orca";
+  mintOne: string; // Token mint address for first token
+  mintTwo: string; // Token mint address for second token
+  tickSpacing?: number; // Optional tick spacing for concentrated liquidity pools
+}
+
+// Marinade-specific config
+export interface MarinadeCollectorConfig extends BaseYieldCollectorConfig {
+  collector: "marinade";
+  // No additional fields needed for Marinade (it's just SOL staking)
 }
 
 export interface YieldOpportunity {
