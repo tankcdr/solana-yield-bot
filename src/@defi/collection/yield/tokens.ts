@@ -70,6 +70,8 @@ export async function getTokenPrice(
   const token = TOKENS[tokenId];
   const coingeckoId = token?.coingeckoId;
 
+  console.log("Fetching price for", tokenId, "with ID", coingeckoId);
+
   if (!coingeckoId) {
     throw new Error(`No CoinGecko ID found for token ${tokenId}`);
   }

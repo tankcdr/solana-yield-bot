@@ -8,49 +8,14 @@ import {
   WhirlpoolData,
 } from "@orca-so/whirlpools-sdk";
 import { DecimalUtil } from "@orca-so/common-sdk";
+import { BN, Wallet } from "@coral-xyz/anchor";
 import {
+  getTokenPrice,
+  TOKENS,
   BaseYieldCollectorConfig,
   OrcaCollectorConfig,
   YieldOpportunity,
-} from "./types";
-import { BN, Wallet } from "@coral-xyz/anchor";
-import { getTokenPrice, TOKENS } from "./tokens";
-
-interface OrcaApiResponse {
-  success: boolean;
-  whirlpools: OrcaWhirlpool[];
-}
-
-interface OrcaWhirlpool {
-  address: string;
-  tokenA: OrcaToken;
-  tokenB: OrcaToken;
-  tickSpacing: number;
-  price: number;
-  tvl: number;
-  volume: {
-    day: number;
-    week: number;
-    month: number;
-  };
-  fee: number;
-  apy: {
-    total: number;
-    fee: number;
-    rewards: number;
-  };
-  rewards?: {
-    mint: string;
-    symbol: string;
-    apr: number;
-  }[];
-}
-
-interface OrcaToken {
-  mint: string;
-  symbol: string;
-  decimals: number;
-}
+} from "@defi";
 
 export class OrcaCollector {
   private readonly _config: OrcaCollectorConfig[];
@@ -108,6 +73,8 @@ export class OrcaCollector {
       // Execute all tasks in parallel and filter out failed ones
       const results = await Promise.allSettled(tasks);
 
+      console.log("results", results);
+
       return results
         .filter(
           (result) => result.status === "fulfilled" && result.value !== null
@@ -127,6 +94,8 @@ export class OrcaCollector {
     connection: Connection
   ): Promise<YieldOpportunity | Error> {
     try {
+      console.log("Parsing whirlpool", collectorId);
+
       const mintA = poolData.tokenMintA.toBase58();
       const mintB = poolData.tokenMintB.toBase58();
       const symbolA = TOKENS[mintA].symbol || "Unknown";
@@ -159,8 +128,10 @@ export class OrcaCollector {
         );
 
       // TVL calculation (requires external prices)
+      console.log("Fetching prices for", mintA, mintB);
       const priceA = await getTokenPrice(mintA); // Async in real use
       const priceB = await getTokenPrice(mintB); // Async in real use
+      console.log("Prices", priceA, priceB);
       const tvl =
         tokenAmountA.toNumber() * priceA + tokenAmountB.toNumber() * priceB;
 

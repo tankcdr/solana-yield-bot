@@ -5,4 +5,7 @@ export type {
   RaydiumCollectorConfig,
   OrcaCollectorConfig,
   MarinadeCollectorConfig,
+  YieldOpportunity,
 } from "./yield/types";
+
+export { TOKENS, getTokenPrice } from "./yield/tokens";
