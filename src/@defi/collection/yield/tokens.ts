@@ -102,3 +102,19 @@ export async function getTokenPrice(
     throw new Error(`Failed to fetch price for ${tokenId}: ${errorMessage}`);
   }
 }
+
+export async function getHistoricalPrices(
+  mint: string,
+  days: number
+): Promise<number[]> {
+  const token = TOKENS[mint];
+  if (!token.coingeckoId) {
+    console.warn(`No CoinGecko ID for mint ${mint}, using default prices`);
+    return Array(days).fill(1); // Fallback
+  }
+  const response = await fetch(
+    `https://api.coingecko.com/api/v3/coins/${token.coingeckoId}/market_chart?vs_currency=usd&days=${days}`
+  );
+  const data = await response.json();
+  return data.prices.map((p: [number, number]) => p[1]); // [timestamp, price]
+}

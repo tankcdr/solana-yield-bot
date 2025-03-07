@@ -3,6 +3,7 @@ export {
   OrcaCollector,
   TOKENS,
   getTokenPrice,
+  getHistoricalPrices,
 } from "./collection/index";
 export type {
   BaseYieldCollectorConfig,

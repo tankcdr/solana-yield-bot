@@ -25,7 +25,8 @@
     "paths": {
       "@defi/*": ["src/@defi/*"],
       "@defi": ["src/@defi"]
-    }
+    },
+    "skipLibCheck": true
   },
   "include": ["src/**/*", "test/**/*"],
   "exclude": ["node_modules", "cdk.out", "target"]

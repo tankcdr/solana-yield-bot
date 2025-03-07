@@ -8,4 +8,4 @@ export type {
   YieldOpportunity,
 } from "./yield/types";
 
-export { TOKENS, getTokenPrice } from "./yield/tokens";
+export { TOKENS, getTokenPrice, getHistoricalPrices } from "./yield/tokens";

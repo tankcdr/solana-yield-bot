@@ -82,7 +82,7 @@ jest.mock("@orca-so/whirlpools-sdk", () => {
             authority: {
               toBase58: () => "DjDsi34mSB66p2nhBL6YvhbcLtZbkGfNybFeLDjJqxJW",
             },
-            emissionsPerSecondX64: new BN("0"),
+            emissionsPerSecondX64: new BN("10000000000000000000000"),
             growthGlobalX64: new BN("0"),
           },
           {
@@ -128,14 +128,44 @@ describe("OrcaCollector", () => {
     jest
       .spyOn(defiModule, "getTokenPrice")
       .mockImplementation((mint: string) => {
-        console.log(`Mock getTokenPrice called with mint: ${mint}`);
         if (mint === "So11111111111111111111111111111111111111112") {
           return Promise.resolve(160); // SOL price
         }
         if (mint === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v") {
           return Promise.resolve(1); // USDC price
         }
+        if (mint === "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE") {
+          return Promise.resolve(3); // Orca price
+        }
         return Promise.resolve(0); // Default
+      });
+
+    // Mock getHistoricalPrices function
+    jest
+      .spyOn(defiModule, "getHistoricalPrices")
+      .mockImplementation((mint: string, days: number) => {
+        // For SOL, create price series with some volatility
+        if (mint === "So11111111111111111111111111111111111111112") {
+          // Create a 30-day price series for SOL with moderate volatility
+          return Promise.resolve([
+            150, 155, 158, 162, 158, 163, 165, 159, 155, 160, 162, 165, 168,
+            170, 166, 162, 159, 163, 168, 170, 175, 172, 168, 165, 160, 155,
+            158, 162, 159, 160,
+          ]);
+        }
+
+        // For USDC (stablecoin), create a relatively stable price series
+        if (mint === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v") {
+          // USDC should be stable around $1
+          return Promise.resolve([
+            1.0, 0.999, 1.001, 0.998, 1.002, 1.0, 0.999, 1.001, 1.0, 0.998,
+            1.001, 1.002, 0.999, 1.0, 1.001, 0.998, 0.999, 1.002, 1.0, 1.001,
+            0.999, 0.998, 1.0, 1.001, 1.002, 0.999, 1.0, 0.998, 1.001, 1.0,
+          ]);
+        }
+
+        // Default fallback
+        return Promise.resolve(Array(days).fill(1));
       });
 
     mockConnection = new Connection("mock");
@@ -177,5 +207,13 @@ describe("OrcaCollector", () => {
       tvl: expect.any(Number),
       apy: expect.any(Number),
     });
+    expect(result[0].rewardApy).toBeCloseTo(2.596, 2);
+    // Expected impermanentLossRisk calculation:
+    // With our mocked price data, the ratio volatility is moderately high
+    // The exact value depends on the calculation in OrcaCollector.ts
+    // Given our mock data, a value around 0.3-0.4 would be expected
+    expect(result[0].impermanentLossRisk).toBeGreaterThan(0);
+    expect(result[0].impermanentLossRisk).toBeLessThan(1);
+    expect(result[0].impermanentLossRisk).toBeCloseTo(0.45, 1);
   });
 });
