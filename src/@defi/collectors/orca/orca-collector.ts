@@ -13,44 +13,36 @@ import { OrcaCollectorConfig } from "./orca-types";
 import { BaseYieldCollectorConfig, YieldOpportunity } from "../../types";
 import { PriceService, priceService } from "../../services/price";
 import { TOKENS } from "../../models";
+import { BaseCollector } from "../base-collector";
 
-export class OrcaCollector {
-  private readonly _config: OrcaCollectorConfig[];
-  private readonly priceService: PriceService;
+export class OrcaCollector extends BaseCollector<OrcaCollectorConfig> {
+  private connection: Connection;
 
   constructor(
-    config: BaseYieldCollectorConfig[],
-    _priceService?: PriceService
+    allConfigs: BaseYieldCollectorConfig[],
+    _priceService: PriceService = priceService
   ) {
-    if (!config || config.length === 0) {
-      throw new Error("Config array cannot be empty");
-    }
-
-    this._config = config.filter(
-      (c) => c.collector === "orca" && c.enabled === true
-    ) as OrcaCollectorConfig[];
-
-    this.priceService = _priceService || priceService;
+    super(allConfigs, "orca", "Orca", _priceService);
+    this.connection = new Connection(
+      "https://api.mainnet-beta.solana.com",
+      "confirmed"
+    );
   }
 
   public async collect(): Promise<YieldOpportunity[]> {
     console.log("OrcaCollector.collect");
 
     try {
-      const connection = new Connection(
-        "https://api.mainnet-beta.solana.com",
-        "confirmed"
-      );
       //get Whirlpool context
       const context = WhirlpoolContext.from(
-        connection,
+        this.connection,
         new Wallet(Keypair.generate()),
         ORCA_WHIRLPOOL_PROGRAM_ID
       );
       const client = buildWhirlpoolClient(context);
       const tickSpacing = 64;
 
-      const tasks = this._config.map(async (config) => {
+      const tasks = this.configs.map(async (config) => {
         const whirlpoolPda = PDAUtil.getWhirlpool(
           ORCA_WHIRLPOOL_PROGRAM_ID,
           ORCA_WHIRLPOOLS_CONFIG,
@@ -67,7 +59,11 @@ export class OrcaCollector {
         const poolData = whirlpool.getData();
 
         // Transform the data into YieldOpportunity
-        return this.parseWhirlpool(poolData, config.collectorId, connection);
+        return this.parseWhirlpool(
+          poolData,
+          config.collectorId,
+          this.connection
+        );
       });
 
       // Execute all tasks in parallel and filter out failed ones

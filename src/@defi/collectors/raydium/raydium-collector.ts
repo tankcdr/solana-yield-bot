@@ -2,29 +2,26 @@ import {
   BaseYieldCollectorConfig,
   YieldOpportunity,
 } from "../../types/yield-types";
+import { BaseCollector } from "../base-collector";
 import {
   RaydiumApiResponse,
   RaydiumCollectorConfig,
   RaydiumPool,
 } from "./raydium-types";
+import { PriceService, priceService } from "../../services/price/price-service";
 
-export class RaydiumCollector {
-  private readonly _config: RaydiumCollectorConfig[];
-
-  constructor(config: BaseYieldCollectorConfig[]) {
-    if (!config || config.length === 0) {
-      throw new Error("Config array cannot be empty");
-    }
-
-    this._config = config.filter(
-      (c) => c.collector === "raydium" && c.enabled === true
-    ) as RaydiumCollectorConfig[];
+export class RaydiumCollector extends BaseCollector<RaydiumCollectorConfig> {
+  constructor(
+    allConfigs: BaseYieldCollectorConfig[],
+    _priceService: PriceService = priceService
+  ) {
+    super(allConfigs, "orca", "Orca", _priceService);
   }
 
   public async collect(): Promise<YieldOpportunity[]> {
     console.log("RaydiumCollector.collect");
 
-    const ids = this._config.map((c) => (c as RaydiumCollectorConfig).poolId);
+    const ids = this.configs.map((c) => (c as RaydiumCollectorConfig).poolId);
     if (ids.length === 0) {
       return [];
     }
