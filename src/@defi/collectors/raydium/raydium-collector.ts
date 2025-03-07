@@ -15,7 +15,7 @@ export class RaydiumCollector extends BaseCollector<RaydiumCollectorConfig> {
     allConfigs: BaseYieldCollectorConfig[],
     _priceService: PriceService = priceService
   ) {
-    super(allConfigs, "orca", "Orca", _priceService);
+    super(allConfigs, "raydium", "Raydium", _priceService);
   }
 
   public async collect(): Promise<YieldOpportunity[]> {
@@ -115,5 +115,13 @@ export class RaydiumCollector extends BaseCollector<RaydiumCollectorConfig> {
         ?.filter((r) => r.mint?.symbol)
         .map((r) => r.mint.symbol) || []
     );
+  }
+
+  public getProtocolName(): string {
+    return this.protocolName;
+  }
+
+  public getConfigurations(): RaydiumCollectorConfig[] {
+    return this.configs as RaydiumCollectorConfig[];
   }
 }

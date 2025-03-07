@@ -37,9 +37,10 @@ export abstract class BaseCollector<T extends BaseYieldCollectorConfig>
     this.priceService = priceService;
 
     if (!this.configs || this.configs.length === 0) {
-      console.warn(
+      console.error(
         `No enabled configurations found for collector type: ${collectorType}`
       );
+      throw new Error("Config array cannot be empty");
     }
   }
 

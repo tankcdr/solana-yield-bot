@@ -215,4 +215,8 @@ export class OrcaCollector extends BaseCollector<OrcaCollectorConfig> {
       return error as Error;
     }
   }
+
+  public getConfigurations(): OrcaCollectorConfig[] {
+    return this.configs;
+  }
 }

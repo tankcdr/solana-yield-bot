@@ -1,5 +1,4 @@
-import { OrcaCollector, OrcaCollectorConfig } from "@defi";
-import * as defiModule from "@defi"; // Import the entire module for spying
+import { OrcaCollector, OrcaCollectorConfig, PriceService } from "@defi";
 import {
   buildWhirlpoolClient,
   PDAUtil,
@@ -113,9 +112,63 @@ jest.mock("@orca-so/whirlpools-sdk", () => {
   };
 });
 
+// Mock the PriceService
+jest.mock("@defi/services/price/price-service", () => {
+  return {
+    PriceService: jest.fn().mockImplementation(() => {
+      return {
+        getTokenPrice: jest.fn().mockImplementation((mint: string) => {
+          if (mint === "So11111111111111111111111111111111111111112") {
+            return Promise.resolve(160); // SOL price
+          }
+          if (mint === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v") {
+            return Promise.resolve(1); // USDC price
+          }
+          if (mint === "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE") {
+            return Promise.resolve(3); // Orca price
+          }
+          return Promise.resolve(0); // Default
+        }),
+        getHistoricalPrices: jest
+          .fn()
+          .mockImplementation((mint: string, days: number) => {
+            // For SOL, create price series with some volatility
+            if (mint === "So11111111111111111111111111111111111111112") {
+              // Create a 30-day price series for SOL with moderate volatility
+              return Promise.resolve([
+                150, 155, 158, 162, 158, 163, 165, 159, 155, 160, 162, 165, 168,
+                170, 166, 162, 159, 163, 168, 170, 175, 172, 168, 165, 160, 155,
+                158, 162, 159, 160,
+              ]);
+            }
+
+            // For USDC (stablecoin), create a relatively stable price series
+            if (mint === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v") {
+              // USDC should be stable around $1
+              return Promise.resolve([
+                1.0, 0.999, 1.001, 0.998, 1.002, 1.0, 0.999, 1.001, 1.0, 0.998,
+                1.001, 1.002, 0.999, 1.0, 1.001, 0.998, 0.999, 1.002, 1.0,
+                1.001, 0.999, 0.998, 1.0, 1.001, 1.002, 0.999, 1.0, 0.998,
+                1.001, 1.0,
+              ]);
+            }
+
+            // Default fallback
+            return Promise.resolve(Array(days).fill(1));
+          }),
+      };
+    }),
+    priceService: {
+      getTokenPrice: jest.fn(),
+      getHistoricalPrices: jest.fn(),
+    },
+  };
+});
+
 describe("OrcaCollector", () => {
   let mockClient: ReturnType<typeof buildWhirlpoolClient>;
   let mockConnection: Connection;
+  let mockPriceService: PriceService;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -124,52 +177,9 @@ describe("OrcaCollector", () => {
       .mockResolvedValueOnce({ value: { amount: "123456789000000000" } })
       .mockResolvedValueOnce({ value: { amount: "5000000000" } });
 
-    // Explicitly spy on getTokenPrice from the @defi module
-    jest
-      .spyOn(defiModule, "getTokenPrice")
-      .mockImplementation((mint: string) => {
-        if (mint === "So11111111111111111111111111111111111111112") {
-          return Promise.resolve(160); // SOL price
-        }
-        if (mint === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v") {
-          return Promise.resolve(1); // USDC price
-        }
-        if (mint === "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE") {
-          return Promise.resolve(3); // Orca price
-        }
-        return Promise.resolve(0); // Default
-      });
-
-    // Mock getHistoricalPrices function
-    jest
-      .spyOn(defiModule, "getHistoricalPrices")
-      .mockImplementation((mint: string, days: number) => {
-        // For SOL, create price series with some volatility
-        if (mint === "So11111111111111111111111111111111111111112") {
-          // Create a 30-day price series for SOL with moderate volatility
-          return Promise.resolve([
-            150, 155, 158, 162, 158, 163, 165, 159, 155, 160, 162, 165, 168,
-            170, 166, 162, 159, 163, 168, 170, 175, 172, 168, 165, 160, 155,
-            158, 162, 159, 160,
-          ]);
-        }
-
-        // For USDC (stablecoin), create a relatively stable price series
-        if (mint === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v") {
-          // USDC should be stable around $1
-          return Promise.resolve([
-            1.0, 0.999, 1.001, 0.998, 1.002, 1.0, 0.999, 1.001, 1.0, 0.998,
-            1.001, 1.002, 0.999, 1.0, 1.001, 0.998, 0.999, 1.002, 1.0, 1.001,
-            0.999, 0.998, 1.0, 1.001, 1.002, 0.999, 1.0, 0.998, 1.001, 1.0,
-          ]);
-        }
-
-        // Default fallback
-        return Promise.resolve(Array(days).fill(1));
-      });
-
     mockConnection = new Connection("mock");
     mockClient = buildWhirlpoolClient({} as any);
+    mockPriceService = new PriceService();
   });
 
   it("should filter out non-orca or disabled configs and collect yield opportunities", async () => {
@@ -184,16 +194,16 @@ describe("OrcaCollector", () => {
       },
     ];
 
-    const collector = new OrcaCollector(config);
+    const collector = new OrcaCollector(config, mockPriceService);
     const result = await collector.collect();
 
     expect(PDAUtil.getWhirlpool).toHaveBeenCalled();
     expect(mockClient.getPool).toHaveBeenCalledTimes(1);
     expect(mockGetTokenAccountBalance).toHaveBeenCalledTimes(2);
-    expect(defiModule.getTokenPrice).toHaveBeenCalledWith(
+    expect(mockPriceService.getTokenPrice).toHaveBeenCalledWith(
       "So11111111111111111111111111111111111111112"
     );
-    expect(defiModule.getTokenPrice).toHaveBeenCalledWith(
+    expect(mockPriceService.getTokenPrice).toHaveBeenCalledWith(
       "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
     );
 
@@ -209,11 +219,57 @@ describe("OrcaCollector", () => {
     });
     expect(result[0].rewardApy).toBeCloseTo(2.596, 2);
     // Expected impermanentLossRisk calculation:
-    // With our mocked price data, the ratio volatility is moderately high
-    // The exact value depends on the calculation in OrcaCollector.ts
-    // Given our mock data, a value around 0.3-0.4 would be expected
     expect(result[0].impermanentLossRisk).toBeGreaterThan(0);
     expect(result[0].impermanentLossRisk).toBeLessThan(1);
     expect(result[0].impermanentLossRisk).toBeCloseTo(0.45, 1);
+  });
+
+  it("should throw an exception if there are no valid configs", async () => {
+    const config = [
+      {
+        collectorId: "orca-sol-usdc",
+        mintOne: "So11111111111111111111111111111111111111112",
+        mintTwo: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        pair: "SOL/USDC",
+        collector: "orca",
+        enabled: false, // Disabled
+      },
+    ];
+
+    expect(() => new OrcaCollector([], mockPriceService)).toThrow(
+      "Config array cannot be empty"
+    );
+  });
+
+  it("should return protocol name correctly", () => {
+    const config = [
+      {
+        collectorId: "orca-sol-usdc",
+        mintOne: "So11111111111111111111111111111111111111112",
+        mintTwo: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        pair: "SOL/USDC",
+        collector: "orca",
+        enabled: true,
+      },
+    ];
+
+    const collector = new OrcaCollector(config, mockPriceService);
+    expect(collector.getProtocolName()).toBe("Orca");
+  });
+
+  it("should return configurations correctly", () => {
+    const config = [
+      {
+        collectorId: "orca-sol-usdc",
+        mintOne: "So11111111111111111111111111111111111111112",
+        mintTwo: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        pair: "SOL/USDC",
+        collector: "orca",
+        enabled: true,
+      },
+    ];
+
+    const collector = new OrcaCollector(config, mockPriceService);
+    expect(collector.getConfigurations()).toEqual(config);
   });
 });
