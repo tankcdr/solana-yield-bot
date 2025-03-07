@@ -1,4 +1,4 @@
-import { OrcaCollector, OrcaCollectorConfig, getTokenPrice } from "@defi";
+import { OrcaCollector, OrcaCollectorConfig } from "@defi";
 import * as defiModule from "@defi"; // Import the entire module for spying
 import {
   buildWhirlpoolClient,

@@ -9,19 +9,19 @@ import {
 } from "@orca-so/whirlpools-sdk";
 import { DecimalUtil } from "@orca-so/common-sdk";
 import { BN, Wallet } from "@coral-xyz/anchor";
-import {
-  getTokenPrice,
-  getHistoricalPrices,
-  TOKENS,
-  BaseYieldCollectorConfig,
-  OrcaCollectorConfig,
-  YieldOpportunity,
-} from "@defi";
+import { OrcaCollectorConfig } from "./orca-types";
+import { BaseYieldCollectorConfig, YieldOpportunity } from "../../types";
+import { PriceService, priceService } from "../../services/price";
+import { TOKENS } from "../../models";
 
 export class OrcaCollector {
   private readonly _config: OrcaCollectorConfig[];
+  private readonly priceService: PriceService;
 
-  constructor(config: BaseYieldCollectorConfig[]) {
+  constructor(
+    config: BaseYieldCollectorConfig[],
+    _priceService?: PriceService
+  ) {
     if (!config || config.length === 0) {
       throw new Error("Config array cannot be empty");
     }
@@ -29,6 +29,8 @@ export class OrcaCollector {
     this._config = config.filter(
       (c) => c.collector === "orca" && c.enabled === true
     ) as OrcaCollectorConfig[];
+
+    this.priceService = _priceService || priceService;
   }
 
   public async collect(): Promise<YieldOpportunity[]> {
@@ -124,8 +126,8 @@ export class OrcaCollector {
         );
 
       // TVL calculation (requires external prices)
-      const priceA = await getTokenPrice(mintA); // Async in real use
-      const priceB = await getTokenPrice(mintB); // Async in real use
+      const priceA = await this.priceService.getTokenPrice(mintA); // Async in real use
+      const priceB = await this.priceService.getTokenPrice(mintB); // Async in real use
       const tvl =
         tokenAmountA.toNumber() * priceA + tokenAmountB.toNumber() * priceB;
 
@@ -152,7 +154,7 @@ export class OrcaCollector {
           Number(r.emissionsPerSecondX64.toString()) / Math.pow(2, 64);
         const annualEmissions = emissionsPerSecond * 31536000; // Seconds in a year
         const rewardMint = r.mint.toBase58();
-        const rewardPrice = await getTokenPrice(rewardMint);
+        const rewardPrice = await this.priceService.getTokenPrice(rewardMint);
         totalAnnualRewardValue += annualEmissions * rewardPrice;
       }
       const rewardApy = totalAnnualRewardValue / tvl;
@@ -173,8 +175,8 @@ export class OrcaCollector {
           Set IL Risk: Use the annualized volatility as the impermanentLossRisk, optionally capping it at 1.
       */
       const days = 30;
-      const pricesA = await getHistoricalPrices(mintA, days);
-      const pricesB = await getHistoricalPrices(mintB, days);
+      const pricesA = await this.priceService.getHistoricalPrices(mintA, days);
+      const pricesB = await this.priceService.getHistoricalPrices(mintB, days);
 
       if (pricesA.length !== pricesB.length) {
         throw new Error("Mismatch in historical price data lengths");
